@@ -151,15 +151,23 @@ func CalcMandelRect(s *MandelState, d *Drawer, x0, y0, x1, y1 int, level int) {
 			}
 		}
 	} else {
-		if x0 < x1-1 && y0 < y1-1 {
-			if level < 10 {
-				level++
-				xm := x0 + w/2
-				ym := y0 + h/2
-				CalcMandelRect(s, d, x0+1, y0+1, xm, ym, level)
-				CalcMandelRect(s, d, xm, y0+1, x1-1, ym, level)
-				CalcMandelRect(s, d, x0+1, ym, xm, y1-1, level)
-				CalcMandelRect(s, d, xm, ym, x1-1, y1-1, level)
+		if w > 3 && h > 3 {
+			if x0 < x1-1 && y0 < y1-1 {
+				if level < 10 {
+					level++
+					xm := x0 + w/2
+					ym := y0 + h/2
+					CalcMandelRect(s, d, x0+1, y0+1, xm, ym, level)
+					CalcMandelRect(s, d, xm, y0+1, x1-1, ym, level)
+					CalcMandelRect(s, d, x0+1, ym, xm, y1-1, level)
+					CalcMandelRect(s, d, xm, ym, x1-1, y1-1, level)
+				}
+			}
+		} else {
+			for y := y0 + 1; y < y1-1; y++ {
+				for x := x0 + 1; x < x1-1; x++ {
+					CalcPoint(s, d, x, y)
+				}
 			}
 		}
 	}
@@ -276,7 +284,7 @@ func main() {
 }
 
 func mandelbrot(z complex128) byte {
-	const iterations = 200
+	const iterations = 255
 	const contrast = 15
 
 	var v complex128
