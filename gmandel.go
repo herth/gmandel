@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/cmplx"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gotk3/gotk3/gdk"
@@ -65,7 +66,7 @@ func (m *MandelState) Shift(rdx, rdy float64) {
 	m.Y += m.Size * rdy
 }
 
-func CalcMandel(s *MandelState, d *Drawer) {
+func CalcMandelx(s *MandelState, d *Drawer) {
 	t1 := time.Now()
 	xmin := s.X - s.Size
 	xmax := s.X + s.Size
@@ -90,7 +91,108 @@ func CalcMandel(s *MandelState, d *Drawer) {
 		}
 	}
 	fmt.Fprintf(os.Stderr, "%v\n", time.Since(t1))
+}
 
+// get the x and y coordinate for the points px,py in 0,0...width,height
+func getXY(s *MandelState, px, py int) (x, y float64) {
+	x = s.X - s.Size + float64(px)/float64(s.Width)*s.Size*2.0
+	yf := float64(s.Height) / float64(s.Width)
+	y = s.Y - s.Size*yf + float64(py)/float64(s.Height)*s.Size*2.0*yf
+	return
+}
+
+func CalcPoint(s *MandelState, d *Drawer, px, py int) byte {
+	x, y := getXY(s, px, py)
+	z := complex(x, y)
+	m := mandelbrot(z) / 16 * 16
+	if m == 0 {
+		d.SetRGB(uint(px), uint(py), 0, 0, 0)
+	} else {
+		d.SetRGB(uint(px), uint(py), m, (m+85)%255, (m+170)%255)
+	}
+	return m
+}
+
+func CalcMandelBorder(s *MandelState, d *Drawer, x0, y0, x1, y1 int) (c byte, uniform bool) {
+	uniform = true
+	c = CalcPoint(s, d, x0, y0)
+	for x := x0; x < x1; x++ {
+		if CalcPoint(s, d, x, y0) != c {
+			uniform = false
+		}
+		if CalcPoint(s, d, x, y1-1) != c {
+			uniform = false
+		}
+	}
+	for y := y0 + 1; y < y1-1; y++ {
+		if CalcPoint(s, d, x0, y) != c {
+			uniform = false
+		}
+		if CalcPoint(s, d, x1-1, y) != c {
+			uniform = false
+		}
+	}
+	return c, uniform
+}
+
+func CalcMandelRect(s *MandelState, d *Drawer, x0, y0, x1, y1 int, level int) {
+	w := x1 - x0
+	h := y1 - y0
+	color, uniform := CalcMandelBorder(s, d, x0, y0, x1, y1)
+	//println(x0, y0, x1, y1, color, uniform)
+	if uniform {
+		for y := y0 + 1; y < y1-1; y++ {
+			for x := x0 + 1; x < x1-1; x++ {
+				if color == 0 {
+					d.SetRGB(uint(x), uint(y), 0, 0, 0)
+				} else {
+					d.SetRGB(uint(x), uint(y), color, (color+85)%255, (color+170)%255)
+				}
+			}
+		}
+	} else {
+		if x0 < x1-1 && y0 < y1-1 {
+			if level < 10 {
+				level++
+				xm := x0 + w/2
+				ym := y0 + h/2
+				CalcMandelRect(s, d, x0+1, y0+1, xm, ym, level)
+				CalcMandelRect(s, d, xm, y0+1, x1-1, ym, level)
+				CalcMandelRect(s, d, x0+1, ym, xm, y1-1, level)
+				CalcMandelRect(s, d, xm, ym, x1-1, y1-1, level)
+			}
+		}
+	}
+}
+
+func CalcMandel(s *MandelState, d *Drawer) {
+	t1 := time.Now()
+	// for py := 0; py < s.Height; py++ {
+	// 	for px := 0; px < s.Width; px++ {
+	// 		CalcPoint(s, d, px, py)
+	// 	}
+	// }
+	//CalcMandelRect(s, d, 0, 0, s.Width, s.Height, 0)
+	n := 4
+	dw := s.Width / n
+	dh := s.Height / n
+	x := 0
+	y := 0
+
+	var w sync.WaitGroup
+
+	w.Add(n * n)
+
+	for i := 0; i < n; i++ {
+		for j := 0; j < n; j++ {
+			go func(i, j int, wg *sync.WaitGroup) {
+				CalcMandelRect(s, d, x+i*dw, y+j*dh, x+(i+1)*dw, y+(j+1)*dh, 0)
+				wg.Done()
+			}(i, j, &w)
+		}
+	}
+	w.Wait()
+	fmt.Fprintf(os.Stderr, "%v\n", time.Since(t1))
 }
 
 func main() {
