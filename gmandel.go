@@ -13,13 +13,6 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 )
 
-const (
-	KEY_LEFT  uint = 65361
-	KEY_UP    uint = 65362
-	KEY_RIGHT uint = 65363
-	KEY_DOWN  uint = 65364
-)
-
 type Drawer struct {
 	buf    *gdk.Pixbuf
 	pixels []byte
@@ -42,12 +35,9 @@ func DrawerFromPixbuf(buf *gdk.Pixbuf) *Drawer {
 func (d *Drawer) SetRGB(x, y uint, r, g, b byte) {
 	if x < d.width && y < d.height {
 		n := y*d.stride + x*d.nchan
-		//println("drawing", x, y, n, len(d.pixels))
 		d.pixels[n] = r
 		d.pixels[n+1] = g
 		d.pixels[n+2] = b
-	} else {
-		//println("skipping", x, y)
 	}
 }
 
@@ -213,7 +203,6 @@ func main() {
 	}
 
 	application.Connect("activate", func() {
-		// Create ApplicationWindow
 		win, err := gtk.ApplicationWindowNew(application)
 		if err != nil {
 			log.Fatal("Could not create application window.", err)
@@ -238,36 +227,32 @@ func main() {
 		CalcMandel(m, d)
 		win.Window.Connect("key-press-event", func(w *gtk.ApplicationWindow, ev *gdk.Event) {
 			keyEvent := &gdk.EventKey{ev}
-			// if move, found := keyMap[keyEvent.KeyVal()]; found {
-			// 	move()
-			// 	win.QueueDraw()
-			// }
 			kv := keyEvent.KeyVal()
 			switch kv {
-			case KEY_LEFT:
+			case gdk.KEY_Left:
 				m.Shift(-0.1, 0)
 				CalcMandel(m, d)
-			case KEY_UP:
+			case gdk.KEY_Up:
 				m.Shift(0, -0.1)
 				CalcMandel(m, d)
-			case KEY_RIGHT:
+			case gdk.KEY_Right:
 				m.Shift(0.1, 0)
 				CalcMandel(m, d)
-			case KEY_DOWN:
+			case gdk.KEY_Down:
 				m.Shift(0, 0.1)
 				CalcMandel(m, d)
-			case 43: // +
+			case gdk.KEY_plus:
 				m.Scale(0.8)
 				CalcMandel(m, d)
-			case 45: // -
+			case gdk.KEY_minus:
 				m.Scale(1.2)
 				CalcMandel(m, d)
-			case 70, 102: // F,f
+			case gdk.KEY_f, gdk.KEY_F:
 				m.X = -0.5
 				m.Y = 0
 				m.Size = 2.0
 				CalcMandel(m, d)
-			case 81, 113: // Q,q
+			case gdk.KEY_q, gdk.KEY_Q:
 				os.Exit(0)
 			default:
 				println("kv=", kv)
@@ -275,7 +260,25 @@ func main() {
 			img.SetFromPixbuf(buf)
 		})
 
-		win.Add(img)
+		eb, err := gtk.EventBoxNew()
+		if err != nil {
+			log.Fatal("Could not create event box.", err)
+		}
+		eb.SetEvents(int(gdk.POINTER_MOTION_MASK | gdk.POINTER_MOTION_HINT_MASK))
+		eb.Connect("motion-notify-event", func(e *gtk.EventBox, ev *gdk.Event) {
+			motionEvent := &gdk.EventMotion{ev}
+			x, y := motionEvent.MotionVal()
+			b := gdk.EventButtonNewFromEvent(ev)
+			state := b.State()
+			ix := int(x)
+			iy := int(y)
+			// d.SetRGB(uint(ix), uint(iy), 255, 0, 0)
+			// img.SetFromPixbuf(buf)
+			println("motion", ix, iy, "left:", state&gdk.GDK_BUTTON1_MASK != 0, "right:", state&gdk.GDK_BUTTON3_MASK != 0)
+		})
+
+		eb.Add(img)
+		win.Add(eb)
 		win.SetTitle("gmandel")
 		win.ShowAll()
 	})
