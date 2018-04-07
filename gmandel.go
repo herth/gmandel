@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gotk3/gotk3/cairo"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
@@ -165,12 +166,6 @@ func CalcMandelRect(s *MandelState, d *Drawer, x0, y0, x1, y1 int, level int) {
 
 func CalcMandel(s *MandelState, d *Drawer) {
 	t1 := time.Now()
-	// for py := 0; py < s.Height; py++ {
-	// 	for px := 0; px < s.Width; px++ {
-	// 		CalcPoint(s, d, px, py)
-	// 	}
-	// }
-	//CalcMandelRect(s, d, 0, 0, s.Width, s.Height, 0)
 	n := 4
 	dw := s.Width / n
 	dh := s.Height / n
@@ -207,45 +202,48 @@ func main() {
 		if err != nil {
 			log.Fatal("Could not create application window.", err)
 		}
-		win.SetDefaultSize(200, 200)
 
 		width, height := 1280, 720
-
+		win.SetDefaultSize(width, height)
 		buf, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, false, 8, width, height)
 		if err != nil {
 			log.Fatal("Could not create buffer.", err)
 		}
 
-		img, err := gtk.ImageNewFromPixbuf(buf)
+		drw, err := gtk.DrawingAreaNew()
 		if err != nil {
-			log.Fatal("Could not create image.", err)
+			log.Fatal("Could not create drawing area.", err)
 		}
 
+		//		surf := cairo.CreateImageSurface(cairo.FORMAT_RGB24, width, height)
+		//		surf.SetSourcePixbuf(buf)
 		d := DrawerFromPixbuf(buf)
 
 		m := &MandelState{Width: width, Height: height, X: -0.5, Y: 0, Size: 2.0}
 		CalcMandel(m, d)
 		win.Window.Connect("key-press-event", func(w *gtk.ApplicationWindow, ev *gdk.Event) {
 			keyEvent := &gdk.EventKey{ev}
+			shift := 0.2
+			scale := 1.5
 			kv := keyEvent.KeyVal()
 			switch kv {
 			case gdk.KEY_Left:
-				m.Shift(-0.1, 0)
+				m.Shift(-1*shift, 0)
 				CalcMandel(m, d)
 			case gdk.KEY_Up:
-				m.Shift(0, -0.1)
+				m.Shift(0, -1*shift)
 				CalcMandel(m, d)
 			case gdk.KEY_Right:
-				m.Shift(0.1, 0)
+				m.Shift(shift, 0)
 				CalcMandel(m, d)
 			case gdk.KEY_Down:
-				m.Shift(0, 0.1)
+				m.Shift(0, shift)
 				CalcMandel(m, d)
 			case gdk.KEY_plus:
-				m.Scale(0.8)
+				m.Scale(1 / scale)
 				CalcMandel(m, d)
 			case gdk.KEY_minus:
-				m.Scale(1.2)
+				m.Scale(scale)
 				CalcMandel(m, d)
 			case gdk.KEY_f, gdk.KEY_F:
 				m.X = -0.5
@@ -257,7 +255,8 @@ func main() {
 			default:
 				println("kv=", kv)
 			}
-			img.SetFromPixbuf(buf)
+			//img.SetFromPixbuf(buf)
+			win.QueueDraw()
 		})
 
 		eb, err := gtk.EventBoxNew()
@@ -273,11 +272,15 @@ func main() {
 			ix := int(x)
 			iy := int(y)
 			// d.SetRGB(uint(ix), uint(iy), 255, 0, 0)
-			// img.SetFromPixbuf(buf)
 			println("motion", ix, iy, "left:", state&gdk.GDK_BUTTON1_MASK != 0, "right:", state&gdk.GDK_BUTTON3_MASK != 0)
 		})
-
-		eb.Add(img)
+		drw.Connect("draw", func(d *gtk.DrawingArea, cr *cairo.Context) {
+			t1 := time.Now()
+			gtk.GdkCairoSetSourcePixBuf(cr, buf, 0.0, 0.0)
+			cr.Paint()
+			fmt.Printf("draw %v\n", time.Since(t1))
+		})
+		eb.Add(drw)
 		win.Add(eb)
 		win.SetTitle("gmandel")
 		win.ShowAll()
